@@ -278,7 +278,7 @@ export default function Home() {
           //display alert message
           alert(`Transaction sent! Hash: ${hash}`);
         }
-        //call allGroupbuys to refresh the current list
+        //call getAllPosts to refresh the current list
         await getAllPosts();
 
         //reset fields back to default values
@@ -370,7 +370,7 @@ export default function Home() {
 
         // (10) display alert message
 
-        //call allGroupbuys to refresh the current list
+        //call getAllPosts to refresh the current list
         await getAllPosts();
 
         //reset fields back to default values
@@ -473,7 +473,7 @@ export default function Home() {
 
         // (14) display alert message
 
-        //call allGroupbuys to refresh the current list
+        //call getAllPosts to refresh the current list
         await getAllPosts();
 
         await setActivePost(postData, latestCid);
