@@ -41,9 +41,7 @@ export default function Home() {
     "Replace with your post manager smart contract address"; //postManager smart contract address
 
   //variables
-  const [token, setToken] = useState<string>(
-    "Replace and add your web3 api key here."
-  );
+  const [token, setToken] = useState<string>("");
 
   const [postTitle, setPostTitle] = useState<string>("");
   const [postContent, setPostContent] = useState<string>("");
@@ -488,6 +486,13 @@ export default function Home() {
     }
   }
 
+  async function getWeb3StorageAPIkey() {
+    const key = process.env.NEXT_PUBLIC_WEB3_STORAGE_API_KEY;
+    if (key != undefined) {
+      setToken(key);
+    }
+  }
+
   const customStyles = {
     content: {
       top: "50%",
@@ -656,6 +661,7 @@ export default function Home() {
 
   useEffect(() => {
     getAllPosts();
+    getWeb3StorageAPIkey();
   }, []);
 
   return (
