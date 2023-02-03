@@ -124,6 +124,16 @@ text-align: right;
   text-decoration: underline;
 }
 
+.dropZoneStyle {
+  outline:  none;
+  overflow: hidden;
+  background-color: lightgray;
+  border: solid;
+  margin: 20px;
+  padding: 40px;
+  width: 500px;
+}
+
 .description {
   display: inherit;
   justify-content: inherit;

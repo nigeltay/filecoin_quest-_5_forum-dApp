@@ -1,11 +1,13 @@
+/* eslint-disable @next/next/no-img-element */
 import Head from "next/head";
 import styles from "../styles/Home.module.css";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Web3Storage, File } from "web3.storage";
 import Modal from "react-modal";
 import { ethers } from "ethers";
 import Link from "next/link";
 import axios from "axios";
+import { useDropzone } from "react-dropzone";
 
 //ABIs
 import postABI from "../utils/postABI.json";
@@ -29,16 +31,15 @@ type PostDetail = {
   postTitle: string;
   postContent: string;
   posterWalletAddress: string;
-  noOfLikes: number;
   noOfComments: number;
   postSCAddress: string;
   comments: Comment[];
-  likedByCurrentUser: boolean;
+  imageCID: string;
+  imageFilename: string;
 };
 
 export default function Home() {
-  const postManagerContract =
-    "Replace with your post manager smart contract address"; //postManager smart contract address
+  const postManagerContract = "0xbdC12009f89Ca557AbDdc70CfDee3B2E1E2c8350"; //postManager smart contract address
 
   //variables
   const [token, setToken] = useState<string>("");
@@ -58,6 +59,11 @@ export default function Home() {
   const [latestCid, setLatestCid] = useState<string>("");
 
   const [commentText, setCommentText] = useState<string>("");
+
+  const [file, setFile] = useState<null | Buffer>(null);
+  const [filename, setFilename] = useState<string>("");
+  const [fileDetails, setFileDetails] = useState<string>("");
+  const [imageUrl, setImageUrl] = useState<string>("");
 
   function openModal() {
     setIsLoading(true);
@@ -96,20 +102,20 @@ export default function Home() {
       );
 
       //(1) call the getPosts function from the contract to get all Posts contract addresses
-
+      const allPostsAddresses = await postManagerContractInstance.getPosts();
       //(2) call getPostsData function from contract
-
+      const allPosts = await postManagerContractInstance.getPostsData(
+        allPostsAddresses
+      );
       //(3) set latest cid using react set variable
-
+      setLatestCid(allPosts.postCID);
       // declare new array
       let new_posts = [];
 
       //iterate and loop through the data retrieve from the blockchain
       for (let i = 0; i < allPosts.posterAddress.length; i++) {
         let posterWalletAddress: string = allPosts.posterAddress[i];
-        let noOfLikes: number = allPosts.numberOfLikes[i].toNumber();
         let noOfComments: number = allPosts.numberOfComments[i].toNumber();
-
         let postSCAddress = allPostsAddresses[i];
 
         //get postId
@@ -140,11 +146,11 @@ export default function Home() {
             postContent: getCurrentPostContent,
             postId: postid.toNumber(),
             posterWalletAddress, //user wallet address
-            noOfLikes,
             noOfComments,
             postSCAddress, //Post smart contract address
             comments: [],
-            likedByCurrentUser: false, //set to false by default
+            imageCID: "", //set to empty string
+            imageFilename: "", //set to empty string
           };
 
           new_posts.push(newPost);
@@ -161,6 +167,11 @@ export default function Home() {
       //check required fields
       if (!postTitle || !postContent) {
         return alert("Fill all the fields!!");
+      }
+
+      //check if user has uploaded a file
+      if (file == null) {
+        return alert("Please upload a image file before proceeding.");
       }
 
       setLoadedData("Creating post ...Please wait");
@@ -182,6 +193,13 @@ export default function Home() {
         const buffer = Buffer.from(JSON.stringify(postObj));
 
         //(4) call web3.storage API function to store data on IPFS as JSON
+        const files = [new File([buffer], "post.json")];
+        const cid = await storage.put(files);
+        setLatestCid(cid);
+
+        //store image on IPFS
+        const imageFile = [new File([file], filename)];
+        const imageCid = await storage.put(imageFile);
 
         closeModal();
 
@@ -203,10 +221,18 @@ export default function Home() {
           );
 
           // (5) call postManager create post function from the contract
-
+          let { hash } = await postManagerContractInstance.createPost(
+            cid,
+            imageCid,
+            filename,
+            {
+              gasLimit: 1200000,
+            }
+          );
           // (6) wait for transaction to be mined
-
+          await provider.waitForTransaction(hash);
           // (7) display alert message
+          alert(`Transaction sent! Hash: ${hash}`);
         }
 
         //call getAllPosts function to refresh the current list of post
@@ -215,6 +241,10 @@ export default function Home() {
         //reset fields back to default values
         setPostTitle("");
         setPostContent("");
+
+        setFile(null);
+        setFileDetails("");
+        setFilename("");
 
         //close modal
         closeModal();
@@ -244,6 +274,10 @@ export default function Home() {
         const newfile = [new File([buffer], "post.json")];
         const cid = await storage.put(newfile);
 
+        //store image on IPFS
+        const imageFile = [new File([file], filename)];
+        const imageCid = await storage.put(imageFile);
+
         setLatestCid(cid);
         closeModal();
 
@@ -266,9 +300,14 @@ export default function Home() {
           );
 
           //call create post function from the postManager contract
-          let { hash } = await postManagerContractInstance.createPost(cid, {
-            gasLimit: 1200000,
-          });
+          let { hash } = await postManagerContractInstance.createPost(
+            cid,
+            imageCid,
+            filename,
+            {
+              gasLimit: 1200000,
+            }
+          );
 
           //wait for transaction to be mined
           await provider.waitForTransaction(hash);
@@ -282,6 +321,10 @@ export default function Home() {
         //reset fields back to default values
         setPostTitle("");
         setPostContent("");
+
+        setFile(null);
+        setFileDetails("");
+        setFilename("");
         //close modal
         closeModal();
       }
@@ -363,11 +406,17 @@ export default function Home() {
         );
 
         // (8) call postManager addComment function from the contract
-
+        let { hash } = await postManagerContractInstance.addComment(
+          newCid,
+          postData.postSCAddress,
+          {
+            gasLimit: 1200000,
+          }
+        );
         // (9) wait for transaction to be mined
-
+        await provider.waitForTransaction(hash);
         // (10) display alert message
-
+        alert(`Transaction sent! Hash: ${hash}`);
         //call getAllPosts to refresh the current list
         await getAllPosts();
 
@@ -418,66 +467,20 @@ export default function Home() {
           signer
         );
 
-        const postInfo =
-          await postContractInstance.getDetailedPostInformation();
+        const imageName = await postContractInstance.imageName();
+        const imageCid = await postContractInstance.imageCID();
 
-        const listOfUserWhoLikedThePost: string[] = postInfo._likeList;
-
-        const hasCurrentUserLiked = listOfUserWhoLikedThePost.some(
-          (walletAddr: string) =>
-            walletAddr.toLowerCase() === currentWalletAddress
-        );
+        setImageUrl(`https://${imageCid}.ipfs.w3s.link/${imageName}`);
 
         setPostToActive({
           ...postData,
           comments: currentPostData.comments,
-          likedByCurrentUser: hasCurrentUserLiked,
-          noOfLikes: listOfUserWhoLikedThePost.length,
+          imageCID: imageCid,
+          imageFilename: imageName,
         });
       }
 
       closeModal();
-    } catch (error) {
-      console.log(error);
-      closeModal();
-      alert(`Error: ${error}`);
-      return `${error}`;
-    }
-  }
-
-  async function upvotePost(postData: PostDetail) {
-    try {
-      setLoadedData("Calling Smart Contract ...Please wait");
-      openModal();
-
-      if (postData.likedByCurrentUser) {
-        alert(
-          `You have already liked this post. You can only like a post once.`
-        );
-        closeModal();
-        return "error";
-      }
-
-      const { ethereum } = window;
-      if (ethereum) {
-        const provider = new ethers.providers.Web3Provider(ethereum);
-        const signer = provider.getSigner();
-
-        // (11) create post contract instance
-
-        // (12) call likePost function from the post smart contract
-
-        // (13) wait for transaction to be mined
-
-        // (14) display alert message
-
-        //call getAllPosts to refresh the current list
-        await getAllPosts();
-
-        await setActivePost(postData, latestCid);
-
-        closeModal();
-      }
     } catch (error) {
       console.log(error);
       closeModal();
@@ -505,6 +508,63 @@ export default function Home() {
     },
   };
 
+  //upload file function
+  function MyDropzone() {
+    const onDrop = useCallback((acceptedFiles: any) => {
+      const file = acceptedFiles[0];
+
+      //check if file exists
+      if (file == null) {
+        throw "file error";
+      }
+
+      if (file) {
+        //set file details into state variables
+        setFilename(file.path);
+        setFileDetails(`${file.path} - ${file.size} bytes`);
+      }
+
+      //read file data with file reader function
+      const reader = new FileReader();
+      reader.readAsArrayBuffer(file);
+      reader.onloadend = function () {
+        const arraybufferData = reader.result;
+
+        if (arraybufferData == null || typeof arraybufferData === "string") {
+          throw "buffer error";
+        }
+
+        const buffer: any = Buffer.from(new Uint8Array(arraybufferData));
+        //set file data into state variable
+        setFile(buffer);
+      };
+    }, []);
+    const { getRootProps, getInputProps, isDragActive } = useDropzone({
+      onDrop,
+      multiple: false, //restrict only only 1 file to be choosen
+      accept: {
+        //restrict allow only jpeg/png/jpg file to be uploaded
+        "image/png": [".png"],
+        "image/jpeg": [".jpeg"],
+        "image/jpg": [".jpg"],
+      },
+    });
+
+    return (
+      <div className={styles.dropZoneStyle} {...getRootProps()}>
+        <input {...getInputProps()} />
+        {isDragActive ? (
+          <p>Drop the files here ...</p>
+        ) : (
+          <p>
+            Drag and drop your Image file here, or click to select file ((Only
+            *.jpeg, *jpg and *.png images will be accepted))
+          </p>
+        )}
+      </div>
+    );
+  }
+
   //render functions
   function renderAllPosts(allPosts: PostDetail) {
     return (
@@ -517,12 +577,8 @@ export default function Home() {
           Posted by: {allPosts.posterWalletAddress}
         </p>
         <p className={styles.paragraphText}>
-          No of Upvotes : {allPosts.noOfLikes}
-        </p>
-        <p className={styles.paragraphText}>
           No of comments : {allPosts.noOfComments}
         </p>
-        {/* <p className={styles.paragraphText}>cid : {allPosts.cid}</p> */}
         <button
           className={styles.viewPostBtn}
           onClick={() => {
@@ -535,32 +591,13 @@ export default function Home() {
     );
   }
 
-  function getColour(hasLiked: boolean) {
-    if (hasLiked) {
-      return "orange";
-    } else {
-      return "black";
-    }
-  }
   function renderActivePost(postData: PostDetail) {
     return (
       <div className={styles.activePostContainer}>
         <div>
-          <div style={{ display: "flex" }}>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              height={48}
-              width={48}
-              className={styles.upvoteBtn}
-              onClick={() => upvotePost(postData)}
-              stroke={"black"}
-              fill={getColour(postData.likedByCurrentUser)}
-            >
-              <path d="M11.95 28.85L24 16.75l12.05 12.1z" />
-            </svg>
+          <div style={{ paddingLeft: "40px" }}>
             <h1 className={styles.paragraphText}>{postData.postTitle} </h1>
           </div>
-          <div style={{ marginLeft: "17.5px" }}>{postData.noOfLikes}</div>
           <div style={{ display: "flex" }}>
             <p className={styles.detailsText}>Post Smart contract address: </p>
             <p className={styles.hyperlinkText}>
@@ -575,6 +612,25 @@ export default function Home() {
           <p className={styles.detailsText}>
             Posted by: {postData.posterWalletAddress}{" "}
           </p>
+          <div style={{ display: "flex" }}>
+            <p className={styles.detailsText}>CID: </p>
+            <p className={styles.hyperlinkText}>
+              <Link
+                href={`https://${latestCid}.ipfs.w3s.link/post.json`}
+                target="_blank"
+              >
+                {latestCid}
+              </Link>
+            </p>
+          </div>
+          {/* image file */}
+          <img
+            src={imageUrl}
+            alt="your image file"
+            width={300}
+            height={300}
+            style={{ paddingLeft: "45px" }}
+          />
           <h4 className={styles.activePostText}>{postData.postContent} </h4>
         </div>
         <div
@@ -714,6 +770,8 @@ export default function Home() {
               <div>{allPosts.map((post) => renderAllPosts(post))}</div>
               <div className={styles.createPostContainer}>
                 <h2 className={styles.createPostText}>Create New Post </h2>
+                <MyDropzone />
+                <p style={{ paddingLeft: "20px" }}>{`${fileDetails}`}</p>
                 <div style={{ margin: "20px" }}>
                   <div style={{ marginTop: "20px" }}>
                     <label>Post Title</label>

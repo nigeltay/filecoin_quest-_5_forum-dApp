@@ -40,7 +40,17 @@
 		"inputs": [
 			{
 				"internalType": "string",
-				"name": "_CID",
+				"name": "_forumCID",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_imageCID",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_imageName",
 				"type": "string"
 			}
 		],
@@ -82,11 +92,6 @@
 				"internalType": "address[]",
 				"name": "posterAddress",
 				"type": "address[]"
-			},
-			{
-				"internalType": "uint256[]",
-				"name": "numberOfLikes",
-				"type": "uint256[]"
 			},
 			{
 				"internalType": "uint256[]",
